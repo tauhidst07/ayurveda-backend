@@ -29,7 +29,7 @@ authRouter.post("/signup", async(req,res)=>{
         password: passwordHash,
      });
       const savedUser=  await user.save();
-    const token = await jwt.sign({_id: user._id}, "Monik@2002")
+    const token = await jwt.sign({_id: user._id}, "process.env.JWT_SECRET")
 
         res.cookie("token", token);
 
