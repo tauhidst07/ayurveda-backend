@@ -57,7 +57,7 @@ router.post("/:type/signup", async (req, res) => {
 
 
 
-     const user = new User({
+     const user = new user({
         FullName,
         emailId,
         password: passwordHash,
@@ -75,7 +75,6 @@ router.post("/:type/signup", async (req, res) => {
 
 
 });
-
 
 authRouter.post("/login", async(req,res)=>{
     try{
