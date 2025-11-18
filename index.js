@@ -3,6 +3,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import authRouter from "./routes/auth.js";
 
 
 dotenv.config(); 
@@ -20,10 +21,9 @@ app.use(cors(corsOptions));
 app.use(express.json()); 
 app.use(cookieParser());
 
-import authRouter from "./routes/auth.js";
 
 
-app.use("/",authRouter);
+app.use("/api/auth",authRouter);
 app.get("/",(req,res)=>{
     res.json({message:"server started successfully.."})
 }) 
