@@ -2,15 +2,28 @@ import conncetDB from "./config/db.js";
 import express from "express"; 
 import dotenv from "dotenv";
 import cors from "cors";
+import cookieParser from "cookie-parser";
+
 
 dotenv.config(); 
 
 const app = express();   
 
-// middleware
-app.use(cors());
-app.use(express.json()); 
 
+const corsOptions = {
+  origin: "http://localhost:5173",
+  credentials: true,
+
+};
+
+app.use(cors(corsOptions));
+app.use(express.json()); 
+app.use(cookieParser());
+
+import authRouter from "./routes/auth.js";
+
+
+app.use("/",authRouter);
 app.get("/",(req,res)=>{
     res.json({message:"server started successfully.."})
 }) 
