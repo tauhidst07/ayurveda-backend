@@ -5,6 +5,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import authRouter from "./routes/auth.js";
 import blogRouter from "./routes/blog.routes.js";
+import consultRouter from "./routes/consulting.js";
 
 
 dotenv.config();
@@ -26,6 +27,7 @@ app.use(cookieParser());
 
 app.use("/api/auth", authRouter);
 app.use("/api/blog", blogRouter);
+app.use("/api/consult-info",consultRouter)
 app.get("/", (req, res) => {
   res.json({ message: "server started successfully.." })
 });
