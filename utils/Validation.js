@@ -1,23 +1,46 @@
 import validator from "validator";
 
-function validateSignUpData(req) {
-  const { FullName, emailId, password } = req.body;
+export default function validateSignUpData(req) {
+  const body = req.body || {};
 
-  if (!FullName) {
-    throw new Error("Name field should not be empty");
-  } else if (!validator.isEmail(emailId)) {
-    throw new Error("Invalid email id");
+  const fullNameRaw = (body.fullName || body.FullName || "").toString().trim();
+  if (!fullNameRaw) {
+    throw new Error("Full name is required");
   }
-    else if(!validator.isStrongPassword(password)){
-        throw new Error("Password is not strong");
-    
+  if (fullNameRaw.length < 3) {
+    throw new Error("Full name must be at least 3 characters");
+  }
+  const emailRaw = (body.email || body.emailId || "").toString().trim().toLowerCase();
+  if (!emailRaw) {
+    throw new Error("Email is required");
+  }
+  if (typeof emailRaw !== "string" || !validator.isEmail(emailRaw)) {
+    throw new Error("Invalid email");
+  }
+
+  const password = body.password;
+  const confirmPassword = body.confirmPassword;
+  if (!password || typeof password !== "string") {
+    throw new Error("Password is required");
+  }
+  if (password.length < 6) {
+    throw new Error("Password must be at least 6 characters");
+  }
+  if (typeof confirmPassword !== "undefined") {
+    if (password !== confirmPassword) {
+      throw new Error("Passwords do not match");
     }
   }
 
+  const roleRaw = (body.role || "").toString().trim().toLowerCase();
+  if (!roleRaw || !["user", "doctor", "admin"].includes(roleRaw)) {
+    throw new Error("Role is required and must be one of: user, doctor, admin");
+  }
 
-export default validateSignUpData;
-  
-
-  
-
-  
+  return {
+    fullName: fullNameRaw,
+    email: emailRaw,
+    password,
+    role: roleRaw,
+  };
+}

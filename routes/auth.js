@@ -1,5 +1,4 @@
 import express from "express";
-import validateSignUpData from "../utils/Validation.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import Admin from "../models/Admin.js";
@@ -18,47 +17,58 @@ const JWT_SECRET = process.env.JWT_SECRET || "replace_me_in_env";
 const JWT_EXPIRES = process.env.JWT_EXPIRES_IN || "1d";
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || "10", 10);
 
-// helper to remove sensitive fields
 const sanitize = (doc) => {
   if (!doc) return null;
   const obj = doc.toObject ? doc.toObject() : { ...doc };
   delete obj.password;
+  delete obj.__v;
   return obj;
 };
 
-// --------- SIGNUP (POST /api/auth/:type/signup) ----------
-authRouter.post("/:type/signup", async (req, res) => {
+const normalizeEmail = (body) => {
+  const raw = (body.email || body.emailId || "").toString().trim().toLowerCase();
+  return raw || null;
+};
+const normalizeName = (body) => {
+  const raw = (body.fullName || body.FullName || "").toString().trim();
+  return raw || null;
+};
+const normalizeRole = (body) => {
+  const raw = (body.role || "").toString().trim().toLowerCase();
+  return raw || null;
+};
+
+// ---------- SIGNUP ----------
+authRouter.post("/signup", async (req, res) => {
   try {
-    const { type } = req.params;
-    const Model = TYPE_MAP[type];
-    if (!Model) return res.status(400).json({ error: "Invalid type. Use admin|user|doctor" });
+    if (!req.body) return res.status(400).json({ error: "Request body required" });
 
-    // run your validation util (assumed to throw on invalid)
-    validateSignUpData(req);
+    const fullName = normalizeName(req.body);
+    const email = normalizeEmail(req.body);
+    const password = req.body.password;
+    const role = normalizeRole(req.body);
 
-    // support both FullName and fullName field names
-    const { FullName, fullName, emailId, password } = req.body;
-    const name = (fullName || FullName || "").trim();
-    if (!name) return res.status(422).json({ error: "Full name is required" });
+    if (!fullName || fullName.length < 3) return res.status(422).json({ error: "Full name is required (min 3 chars)" });
+    if (!email || !email.includes("@")) return res.status(422).json({ error: "Valid email is required" });
+    if (!password || typeof password !== "string" || password.length < 6) return res.status(422).json({ error: "Password must be at least 6 characters" });
+    if (!role || !["user", "doctor", "admin"].includes(role)) return res.status(400).json({ error: "Invalid or missing role. Use 'user', 'doctor' or 'admin' in request body" });
 
-    if (!emailId || !emailId.includes("@")) return res.status(422).json({ error: "Valid emailId is required" });
-    if (!password || password.length < 6) return res.status(422).json({ error: "Password must be at least 6 characters" });
+    const Model = TYPE_MAP[role];
 
-    // check duplicate within chosen model
-    const existing = await Model.findOne({ emailId: emailId.toLowerCase() });
+    const existing = await Model.findOne({ emailId: email });
     if (existing) return res.status(409).json({ error: "Email already registered" });
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     const doc = new Model({
-      fullName: name,
-      emailId: emailId.toLowerCase(),
+      fullName,
+      emailId: email,
       password: passwordHash,
     });
 
     const saved = await doc.save();
 
-    const payload = { sub: saved._id.toString(), type };
+    const payload = { sub: saved._id.toString(), type: role };
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
 
     const cookieOptions = {
@@ -69,32 +79,38 @@ authRouter.post("/:type/signup", async (req, res) => {
     };
 
     res.cookie("token", token, cookieOptions);
-    return res.status(201).json({ message: `${type} created`, data: sanitize(saved) });
+    return res.status(201).json({ message: `${role} created`, data: sanitize(saved), token });
   } catch (err) {
     console.error("signup error:", err);
-    // if your validateSignUpData throws with message, return that
+    if (err && err.code === 11000) {
+      return res.status(409).json({ error: "Email already registered" });
+    }
     if (err && err.message) return res.status(400).json({ error: err.message });
     return res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// --------- LOGIN (POST /api/auth/:type/login) ----------
-authRouter.post("/:type/login", async (req, res) => {
+// ---------- LOGIN ----------
+authRouter.post("/login", async (req, res) => {
   try {
-    const { type } = req.params;
-    const Model = TYPE_MAP[type];
-    if (!Model) return res.status(400).json({ error: "Invalid type. Use admin|user|doctor" });
+    if (!req.body) return res.status(400).json({ error: "Request body required" });
 
-    const { emailId, password } = req.body;
-    if (!emailId || !password) return res.status(422).json({ error: "emailId and password are required" });
+    const email = normalizeEmail(req.body);
+    const password = req.body.password;
+    const role = normalizeRole(req.body);
 
-    const user = await Model.findOne({ emailId: emailId.toLowerCase() });
+    if (!email || !password) return res.status(422).json({ error: "email and password are required" });
+    if (!role || !["user", "doctor", "admin"].includes(role)) return res.status(400).json({ error: "Invalid or missing role. Use 'user', 'doctor' or 'admin' in request body" });
+
+    const Model = TYPE_MAP[role];
+
+    const user = await Model.findOne({ emailId: email });
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) return res.status(401).json({ error: "Invalid credentials" });
 
-    const payload = { sub: user._id.toString(), type };
+    const payload = { sub: user._id.toString(), type: role };
     const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES });
 
     const cookieOptions = {
@@ -108,6 +124,8 @@ authRouter.post("/:type/login", async (req, res) => {
     return res.json({ message: "Login successful", data: sanitize(user), token });
   } catch (err) {
     console.error("login error:", err);
+    if (err && err.code === 11000) return res.status(409).json({ error: "Email already registered" });
+    if (err && err.message) return res.status(400).json({ error: err.message });
     return res.status(500).json({ error: "Internal server error" });
   }
 });
