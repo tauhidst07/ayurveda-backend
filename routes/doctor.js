@@ -2,10 +2,10 @@ import express from "express";
 import Doctor from "../models/Doctor.js";
 import userAuth from "../middleware/auth.js";
 
-const consultRouter = express.Router();
+const doctorRouter = express.Router();
 
 
-consultRouter.get("/doctor/:id/consult-info",userAuth, async (req, res) => {
+doctorRouter.get("/doctor/:id",userAuth, async (req, res) => {
   try {
     const doctor = await Doctor.findById(req.params.id);
 
@@ -31,4 +31,4 @@ consultRouter.get("/doctor/:id/consult-info",userAuth, async (req, res) => {
   }
 });
 
-export default consultRouter;
+export default doctorRouter;
